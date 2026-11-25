@@ -49,7 +49,8 @@ export async function getShopPulse(shopId: string): Promise<ShopPulse> {
 
   // Prepaid shop_wallets were removed from the product. Pulse still exposes
   // zero credit fields so existing shop UI keeps a stable shape.
-  const [subscription, invoices, payments] = await Promise.all([
+  const cutoff = since.slice(0, 10);
+  const [subscription, recentInvoices, openBalances, payments] = await Promise.all([
     supabase
       .from('subscriptions')
       .select('plan_id, status, created_at')
@@ -59,10 +60,18 @@ export async function getShopPulse(shopId: string): Promise<ShopPulse> {
       .maybeSingle(),
     supabase
       .from('invoices')
-      .select('grand_total, balance_due, invoice_date, status')
+      .select('grand_total')
       .eq('shop_id', shopId)
       .is('deleted_at', null)
-      .neq('status', 'cancelled'),
+      .neq('status', 'cancelled')
+      .gte('invoice_date', cutoff),
+    supabase
+      .from('invoices')
+      .select('balance_due')
+      .eq('shop_id', shopId)
+      .is('deleted_at', null)
+      .neq('status', 'cancelled')
+      .gt('balance_due', 0),
     supabase
       .from('invoice_payments')
       .select('amount')
@@ -70,19 +79,13 @@ export async function getShopPulse(shopId: string): Promise<ShopPulse> {
       .gte('payment_date', since),
   ]);
 
-  const rows = invoices.data || [];
-  const cutoff = since.slice(0, 10);
-  let gmv30d = 0;
-  let invoices30d = 0;
-  let balanceDue = 0;
-  for (const row of rows) {
-    balanceDue += num(row.balance_due);
-    const day = String(row.invoice_date ?? '').slice(0, 10);
-    if (day >= cutoff) {
-      gmv30d += num(row.grand_total);
-      invoices30d += 1;
-    }
-  }
+  const recent = recentInvoices.data || [];
+  const gmv30d = recent.reduce((sum, row) => sum + num(row.grand_total), 0);
+  const invoices30d = recent.length;
+  const balanceDue = (openBalances.data || []).reduce(
+    (sum, row) => sum + num(row.balance_due),
+    0
+  );
 
   const planId = subscription.data?.plan_id ? String(subscription.data.plan_id) : 'none';
   let planName = planId === 'none' ? 'No plan' : planId;

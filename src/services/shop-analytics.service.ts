@@ -1,7 +1,7 @@
 'use server';
 
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { requireSuperAdmin } from './admin-auth.service';
+import { requireAdminPermission } from './admin-auth.service';
 import { planMonthlyPrice } from '@/lib/plan-prices';
 import { getActivationSnapshot } from './onboarding.service';
 import { classifyShopHealth, type ShopHealthCounts } from '@/lib/shop-health';
@@ -21,7 +21,7 @@ async function countRows(
 }
 
 export async function getShopAnalytics(shopId: string) {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
 
   const { data: shop } = await supabase
@@ -125,7 +125,7 @@ export async function getShopAnalytics(shopId: string) {
 }
 
 export async function getShopActivityLogs(shopId: string, limit = 20) {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase
     .from('audit_logs')
@@ -159,7 +159,7 @@ export async function getFeatureAdoptionRates() {
 }
 
 export async function getRevenueMetrics() {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
 
   const { data: subscriptions } = await supabase
@@ -181,7 +181,7 @@ export async function getRevenueMetrics() {
 }
 
 export async function getUsageMetrics() {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
 
   const [

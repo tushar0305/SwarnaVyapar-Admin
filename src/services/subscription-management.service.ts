@@ -2,7 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { requireSuperAdmin, logAdminAction, assertAnyAdminPermission } from './admin-auth.service';
+import {
+  requireSuperAdmin,
+  requireAdminPermission,
+  logAdminAction,
+  assertAnyAdminPermission,
+} from './admin-auth.service';
 import { planMonthlyPrice } from '@/lib/plan-prices';
 
 interface SubscriptionFilters {
@@ -12,7 +17,7 @@ interface SubscriptionFilters {
 }
 
 export async function getAllSubscriptions(filters?: SubscriptionFilters) {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
 
   let query = supabase
@@ -51,7 +56,7 @@ export async function getAllSubscriptions(filters?: SubscriptionFilters) {
 }
 
 export async function getSubscriptionById(subscriptionId: string) {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
 
   const { data, error } = await supabase
@@ -145,7 +150,7 @@ export async function reactivateSubscription(subscriptionId: string) {
 }
 
 export async function getSubscriptionStatistics() {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
 
   const { data: subscriptions } = await supabase

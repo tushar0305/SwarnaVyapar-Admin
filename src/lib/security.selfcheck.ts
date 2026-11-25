@@ -21,7 +21,8 @@ const privateLookup = async () => ['10.0.0.8'];
 
 async function main() {
   const ok = await assertPublicHttpUrl('https://example.com/path', publicLookup);
-  assert.equal(ok.hostname, 'example.com');
+  assert.equal(ok.url.hostname, 'example.com');
+  assert.deepEqual(ok.addresses, ['93.184.216.34']);
 
   for (const blocked of [
     'http://127.0.0.1/',
@@ -42,6 +43,11 @@ async function main() {
       fetchImpl: async () =>
         new Response(null, { status: 302, headers: { location: 'http://127.0.0.1/' } }),
     })
+  );
+
+  // Mixed DNS answers that include a private IP must fail closed.
+  await assert.rejects(() =>
+    assertPublicHttpUrl('https://example.com', async () => ['93.184.216.34', '10.0.0.1'])
   );
 
   console.log('security.selfcheck: ok');

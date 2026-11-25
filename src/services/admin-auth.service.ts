@@ -203,7 +203,7 @@ export async function getAuditLog(filters?: {
   limit?: number;
   offset?: number;
 }) {
-  await requireSuperAdmin();
+  await requireAdminPermission('system_settings');
   const supabase = getServiceRoleClient();
 
   let query = supabase

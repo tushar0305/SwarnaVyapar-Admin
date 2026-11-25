@@ -136,7 +136,7 @@ export async function testWhatsAppConnection(): Promise<WhatsAppStatus> {
 }
 
 export async function provisionOpsTemplate(): Promise<WhatsAppStatus> {
-  await requireSuperAdmin();
+  await assertAdminPermission('system_settings');
   const config = getWhatsAppConfig();
   if (!config) return loadStatus();
   const result = await ensureOpsTemplate(config);
@@ -158,7 +158,8 @@ export async function listWhatsAppShops() {
     .from('shops')
     .select('id, shop_name, phone_number, email')
     .eq('is_active', true)
-    .order('shop_name');
+    .order('shop_name')
+    .limit(500);
   if (error) throw error;
   return (data || []).map((row) => ({
     id: row.id as string,

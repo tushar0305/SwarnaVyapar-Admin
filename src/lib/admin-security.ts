@@ -28,11 +28,20 @@ export function clientIp(headers: Headers, directIp?: string | null): string {
   return parts.length === 1 ? parts[0] : parts[parts.length - 1];
 }
 
+/**
+ * Prefer a dedicated ADMIN_SESSION_SECRET so the idle-session MAC is not tied
+ * to the database god-key. Local/dev may fall back to the service-role key;
+ * production requires the dedicated secret.
+ */
 export function sessionSigningSecret(
   explicit = process.env.ADMIN_SESSION_SECRET,
-  fallback = process.env.SUPABASE_SERVICE_ROLE_KEY
+  fallback = process.env.SUPABASE_SERVICE_ROLE_KEY,
+  nodeEnv = process.env.NODE_ENV
 ): string | null {
-  const value = (explicit?.trim() || fallback?.trim() || '');
+  const primary = explicit?.trim() || '';
+  if (primary.length >= 16) return primary;
+  if (nodeEnv === 'production') return null;
+  const value = fallback?.trim() || '';
   return value.length >= 16 ? value : null;
 }
 
@@ -96,4 +105,18 @@ export function isAdminSessionExpired(
   if (!timeoutSeconds || timeoutSeconds <= 0) return false;
   if (!startedAtMs) return true;
   return Date.now() - startedAtMs > timeoutSeconds * 1000;
+}
+
+/**
+ * Idle timeout in seconds.
+ * Default 30 minutes. Set ADMIN_SESSION_TIMEOUT=0 to disable.
+ * Missing/invalid values fall back to the default (fail closed for idle sessions).
+ */
+export function adminSessionTimeoutSeconds(
+  raw = process.env.ADMIN_SESSION_TIMEOUT
+): number {
+  if (raw == null || String(raw).trim() === '') return 1800;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) return 1800;
+  return Math.trunc(value);
 }

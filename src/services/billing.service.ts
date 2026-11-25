@@ -2,7 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { requireSuperAdmin, logAdminAction, assertAnyAdminPermission } from './admin-auth.service';
+import {
+  requireSuperAdmin,
+  requireAdminPermission,
+  logAdminAction,
+  assertAnyAdminPermission,
+} from './admin-auth.service';
 import { planMonthlyPrice } from '@/lib/plan-prices';
 import { amountFromPayload, classifyBillingEvent } from '@/lib/billing-events';
 
@@ -28,7 +33,7 @@ export async function getAllPaymentHistory(filters?: {
   endDate?: string;
   limit?: number;
 }): Promise<BillingEventRow[]> {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
 
   let query = supabase
@@ -62,7 +67,7 @@ export async function getAllPaymentHistory(filters?: {
 }
 
 export async function getShopPaymentHistory(shopId: string) {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
 
   const { data, error } = await supabase
@@ -80,7 +85,7 @@ export async function getShopPaymentHistory(shopId: string) {
  * Platform billing KPIs from subscriptions + billing_events.
  */
 export async function getBillingStatistics() {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
 
   const [subsResult, eventsResult] = await Promise.all([

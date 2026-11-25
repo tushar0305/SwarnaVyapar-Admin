@@ -12,7 +12,7 @@ import {
   type AgentPlayId,
 } from '@/lib/agent-plays';
 import { normalizeWhatsAppPhone } from '@/lib/whatsapp/phone';
-import { logAdminAction, requireSuperAdmin, assertAdminPermission } from './admin-auth.service';
+import { logAdminAction, requireAdminPermission, assertAdminPermission } from './admin-auth.service';
 import { getActivationSnapshot } from './onboarding.service';
 import { sendWhatsAppToShop } from './whatsapp-outreach.service';
 
@@ -33,8 +33,11 @@ export type AgentQueueRow = {
   upgradeReady: boolean;
 };
 
-export async function getAgentQueue(): Promise<AgentQueueRow[]> {
-  await requireSuperAdmin();
+export async function getAgentQueue(
+  options: { persistOutcomes?: boolean } = {}
+): Promise<AgentQueueRow[]> {
+  await requireAdminPermission('manage_shops');
+  const persistOutcomes = options.persistOutcomes !== false;
   const snapshot = await getActivationSnapshot();
   const shopIds = snapshot.shops.map((shop) => shop.shopId);
   const supabase = getServiceRoleClient();
@@ -146,7 +149,7 @@ export async function getAgentQueue(): Promise<AgentQueueRow[]> {
       upgradeReady: shop.upgradeReady,
     });
   }
-  if (outcomeWrites.length > 0) {
+  if (persistOutcomes && outcomeWrites.length > 0) {
     await Promise.all(
       outcomeWrites.map((row) =>
         supabase
@@ -188,7 +191,7 @@ async function upsertState(
 
 export async function approveAgentSend(shopId: string) {
   await assertAdminPermission('manage_shops');
-  const queue = await getAgentQueue();
+  const queue = await getAgentQueue({ persistOutcomes: false });
   const row = queue.find((item) => item.shopId === shopId);
   if (!row) throw new Error('This shop has no play right now');
   if (row.gate !== 'ready') throw new Error('This shop is not ready for another message');

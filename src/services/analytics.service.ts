@@ -1,10 +1,10 @@
 'use server';
 
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { requireSuperAdmin } from './admin-auth.service';
+import { requireAdminPermission } from './admin-auth.service';
 
 export async function getShopGrowth() {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
 
   const { data: shops } = await supabase
@@ -25,7 +25,7 @@ export async function getShopGrowth() {
 }
 
 export async function getUserActivityMetrics() {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
 
   const [rolesResult, activeRoles, shopsResult] = await Promise.all([
@@ -53,7 +53,7 @@ export async function getUserActivityMetrics() {
 }
 
 export async function getSubscriptionDistribution() {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
 
   const { data: subscriptions } = await supabase
@@ -81,7 +81,7 @@ export async function getSubscriptionDistribution() {
 }
 
 export async function getPlatformStats() {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
 
   const [shopsResult, userRolesResult, auditsResult, flagsResult] =
@@ -107,7 +107,7 @@ export async function getPlatformStats() {
 }
 
 export async function getRecentActivity() {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
 
   const [{ data: recentShops }, { data: recentAudits }] = await Promise.all([

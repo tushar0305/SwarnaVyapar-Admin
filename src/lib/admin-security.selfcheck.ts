@@ -3,10 +3,12 @@
  * Run: npx tsx src/lib/admin-security.selfcheck.ts
  */
 import {
+  adminSessionTimeoutSeconds,
   clientIp,
   isAdminAuthBypassed,
   isAdminSessionExpired,
   isIpAllowed,
+  sessionSigningSecret,
   signAdminSession,
   verifyAdminSession,
 } from './admin-security';
@@ -24,6 +26,11 @@ console.assert(
   'stale expired'
 );
 console.assert(isAdminSessionExpired(Date.now() - 99999, 0) === false, 'timeout off');
+console.assert(adminSessionTimeoutSeconds('') === 1800, 'default timeout');
+console.assert(adminSessionTimeoutSeconds(undefined) === 1800, 'unset timeout');
+console.assert(adminSessionTimeoutSeconds('0') === 0, 'explicit disable');
+console.assert(adminSessionTimeoutSeconds('900') === 900, 'custom timeout');
+console.assert(adminSessionTimeoutSeconds('nope') === 1800, 'invalid falls back');
 
 console.assert(isAdminAuthBypassed('development', undefined) === false, 'dev requires login');
 console.assert(isAdminAuthBypassed('development', '1') === false, 'bypass flag ignored');
@@ -45,6 +52,22 @@ async function main() {
   assert.equal(await verifyAdminSession(signed, secret), 1_700_000_000_000);
   assert.equal(await verifyAdminSession(`${Date.now()}`, secret), null);
   assert.equal(await verifyAdminSession(signed, 'other-secret-value'), null);
+
+  assert.equal(
+    sessionSigningSecret('dedicated-secret-16', 'service-role-fallback', 'production'),
+    'dedicated-secret-16'
+  );
+  assert.equal(
+    sessionSigningSecret('', 'service-role-fallback-key', 'production'),
+    null,
+    'production rejects service-role fallback'
+  );
+  assert.equal(
+    sessionSigningSecret('', 'service-role-fallback-key', 'development'),
+    'service-role-fallback-key',
+    'dev may fall back'
+  );
+
   console.log('admin-security.selfcheck: ok');
 }
 

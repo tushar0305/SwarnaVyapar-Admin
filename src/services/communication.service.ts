@@ -2,7 +2,12 @@
 
 import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { authActorId } from '@/lib/admin-ids';
-import { requireSuperAdmin, logAdminAction, assertAdminPermission } from './admin-auth.service';
+import {
+  requireSuperAdmin,
+  requireAdminPermission,
+  logAdminAction,
+  assertAdminPermission,
+} from './admin-auth.service';
 import { fanOutShopNotifications } from './shop-inbox.service';
 
 interface EmailMessage {
@@ -184,7 +189,7 @@ export async function getAllSupportTickets(filters?: {
   priority?: string;
   shopId?: string;
 }) {
-  await requireSuperAdmin();
+  await requireAdminPermission('manage_shops');
   const supabase = getServiceRoleClient();
 
   let query = supabase
@@ -193,7 +198,8 @@ export async function getAllSupportTickets(filters?: {
       *,
       shop:shops(id, shop_name, email)
     `)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(200);
 
   if (filters?.status) {
     query = query.eq('status', filters.status);

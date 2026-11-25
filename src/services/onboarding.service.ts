@@ -1,7 +1,7 @@
 'use server';
 
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { requireSuperAdmin, logAdminAction } from './admin-auth.service';
+import { requireSuperAdmin, requireAdminPermission, logAdminAction } from './admin-auth.service';
 import { fanOutShopNotifications } from './shop-inbox.service';
 import {
   classifyShopHealth,
@@ -397,7 +397,7 @@ export async function nudgeShop(input: {
   title?: string;
   message?: string;
 }) {
-  await requireSuperAdmin();
+  await requireAdminPermission('manage_shops');
   const copy = NUDGE_COPY[input.cohort || ''] || NUDGE_COPY.needs_help;
   const title = (input.title || copy.title).trim();
   const message = (input.message || copy.message).trim();

@@ -2,7 +2,7 @@
 
 import { cache } from 'react';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { requireSuperAdmin } from './admin-auth.service';
+import { requireAdminPermission } from './admin-auth.service';
 
 export type TenantPulse = {
   id: string;
@@ -86,7 +86,7 @@ function asRecord(value: unknown): Record<string, unknown> {
  * Replaces the overview's fan-out of count queries.
  */
 export const getCommandCenter = cache(async (): Promise<CommandCenter> => {
-  await requireSuperAdmin();
+  await requireAdminPermission('view_analytics');
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase.rpc('admin_command_center_snapshot');
   if (error) throw error;

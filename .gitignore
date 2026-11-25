@@ -47,3 +47,16 @@ next-env.d.ts
 # OS
 Thumbs.db
 .backups/
+
+# graphify (generated knowledge graph — keep out of git)
+graphify-out/
+
+# Local tooling / agent caches (keep shared Cursor rules)
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
+*.log
+logs/
+.tmp/
+.temp/
+.cache/

@@ -1,7 +1,7 @@
 'use server';
 
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { requireSuperAdmin } from './admin-auth.service';
+import { requireAdminPermission } from './admin-auth.service';
 
 interface DatabaseHealthMetrics {
   status: 'healthy' | 'degraded' | 'down';
@@ -16,7 +16,7 @@ interface ServiceStatus {
 }
 
 export async function getDatabaseHealth(): Promise<DatabaseHealthMetrics> {
-  await requireSuperAdmin();
+  await requireAdminPermission('system_settings');
   const supabase = getServiceRoleClient();
   const startTime = Date.now();
 
@@ -40,7 +40,7 @@ export async function getDatabaseHealth(): Promise<DatabaseHealthMetrics> {
 }
 
 export async function getServiceStatuses(): Promise<ServiceStatus[]> {
-  await requireSuperAdmin();
+  await requireAdminPermission('system_settings');
   const supabase = getServiceRoleClient();
   const services: ServiceStatus[] = [];
 
@@ -118,7 +118,7 @@ export async function getServiceStatuses(): Promise<ServiceStatus[]> {
 
 /** Columns match migration: snapshot_at, total_shops, active_shops, … */
 export async function getHealthSnapshots(limit = 20) {
-  await requireSuperAdmin();
+  await requireAdminPermission('system_settings');
   const supabase = getServiceRoleClient();
 
   const { data, error } = await supabase
@@ -138,7 +138,7 @@ export async function getHealthSnapshots(limit = 20) {
 }
 
 export async function createHealthSnapshot() {
-  await requireSuperAdmin();
+  await requireAdminPermission('system_settings');
   const supabase = getServiceRoleClient();
   const dbHealth = await getDatabaseHealth();
 
@@ -171,7 +171,7 @@ export async function createHealthSnapshot() {
 }
 
 export async function getErrorRateMetrics() {
-  await requireSuperAdmin();
+  await requireAdminPermission('system_settings');
   const supabase = getServiceRoleClient();
 
   const { data: auditLogs } = await supabase

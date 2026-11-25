@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import {
   ADMIN_SESSION_COOKIE,
+  adminSessionTimeoutSeconds,
   clientIp,
   isAdminAuthBypassed,
   isAdminSessionExpired,
@@ -10,6 +11,7 @@ import {
   sessionSigningSecret,
   verifyAdminSession,
 } from '@/lib/admin-security';
+import { hasSupabasePublicEnv } from '@/lib/supabase/env';
 
 /** Next.js 16+ proxy (replaces deprecated middleware.ts convention). */
 export async function proxy(request: NextRequest) {
@@ -37,6 +39,16 @@ export async function proxy(request: NextRequest) {
     if (!isIpAllowed(ip, process.env.ADMIN_IP_WHITELIST)) {
       return NextResponse.redirect(new URL('/unauthorized', request.url));
     }
+  }
+
+  if (!hasSupabasePublicEnv()) {
+    console.error(
+      '[proxy] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY'
+    );
+    return new NextResponse(
+      'Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY, then redeploy.',
+      { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } }
+    );
   }
 
   const supabase = createServerClient(
@@ -73,16 +85,20 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user && !isPublicPath) {
-    const timeoutSec = Number(process.env.ADMIN_SESSION_TIMEOUT || 0);
-    const startedAt = await verifyAdminSession(
-      request.cookies.get(ADMIN_SESSION_COOKIE)?.value,
-      sessionSigningSecret()
-    );
-    if (isAdminSessionExpired(startedAt, timeoutSec)) {
-      await supabase.auth.signOut();
-      const login = NextResponse.redirect(new URL('/login', request.url));
-      login.cookies.delete(ADMIN_SESSION_COOKIE);
-      return login;
+    const timeoutSec = adminSessionTimeoutSeconds();
+    if (timeoutSec > 0) {
+      const secret = sessionSigningSecret();
+      const startedAt = await verifyAdminSession(
+        request.cookies.get(ADMIN_SESSION_COOKIE)?.value,
+        secret
+      );
+      // Missing secret or unsigned/forged cookie → force re-login when timeout is on.
+      if (!secret || isAdminSessionExpired(startedAt, timeoutSec)) {
+        await supabase.auth.signOut();
+        const login = NextResponse.redirect(new URL('/login', request.url));
+        login.cookies.delete(ADMIN_SESSION_COOKIE);
+        return login;
+      }
     }
 
     const { data: admin, error } = await supabase

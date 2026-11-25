@@ -2,7 +2,7 @@
 
 import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { revokeUsersWithoutLiveShop } from '@/lib/auth-sessions';
-import { requireSuperAdmin, requireAdminPermission, logAdminAction } from './admin-auth.service';
+import { requireAdminPermission, logAdminAction } from './admin-auth.service';
 import { success, failure } from '@/lib/utils';
 import type { ServiceResult } from '@/types';
 
@@ -29,7 +29,7 @@ export async function getAllUsers(filters?: {
   limit?: number;
   offset?: number;
 }): Promise<{ data: PlatformUserRow[]; count: number }> {
-  await requireSuperAdmin();
+  await requireAdminPermission('manage_users');
   const supabase = getServiceRoleClient();
 
   const { data, error } = await supabase.rpc('admin_list_users', {
@@ -90,7 +90,7 @@ export async function getAllUsers(filters?: {
  * Get user details by ID
  */
 export async function getUserById(userId: string) {
-  await requireSuperAdmin();
+  await requireAdminPermission('manage_users');
   const supabase = getServiceRoleClient();
 
   // Get all shop roles for this user
@@ -265,7 +265,7 @@ export async function forcePasswordReset(userId: string): Promise<
  * Get user statistics
  */
 export async function getUserStatistics() {
-  await requireSuperAdmin();
+  await requireAdminPermission('manage_users');
   const supabase = getServiceRoleClient();
 
   const [total, active] = await Promise.all([

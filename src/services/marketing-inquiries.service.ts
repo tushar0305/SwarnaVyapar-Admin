@@ -158,37 +158,68 @@ export async function listMarketingInquiries(filters: InquiryListFilters = {}): 
   const page = Math.max(1, requested);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
+  const today = istTodayYmd();
 
-  const [{ data, error, count }, overviewResult, assigneeResult] = await Promise.all([
+  const countByStatus = (status: string) =>
+    supabase
+      .from('marketing_inquiries')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', status);
+
+  const [
+    { data, error, count },
+    totalRes,
+    newRes,
+    contactedRes,
+    demoRes,
+    convertedRes,
+    lostRes,
+    dueRes,
+    assigneeResult,
+  ] = await Promise.all([
     query.range(from, to),
-    supabase.from('marketing_inquiries').select('status, follow_up_on'),
+    supabase.from('marketing_inquiries').select('id', { count: 'exact', head: true }),
+    countByStatus('new'),
+    countByStatus('contacted'),
+    countByStatus('demo_scheduled'),
+    countByStatus('converted'),
+    countByStatus('lost'),
+    supabase
+      .from('marketing_inquiries')
+      .select('id', { count: 'exact', head: true })
+      .lte('follow_up_on', today)
+      .not('status', 'in', '(converted,lost)')
+      .not('follow_up_on', 'is', null),
     supabase
       .from('marketing_inquiries')
       .select('assigned_to')
       .not('assigned_to', 'is', null)
-      .order('assigned_to'),
+      .order('assigned_to')
+      .limit(500),
   ]);
 
   if (error) throw new Error(error.message);
-  if (overviewResult.error) throw new Error(overviewResult.error.message);
-  if (assigneeResult.error) throw new Error(assigneeResult.error.message);
+  for (const result of [
+    totalRes,
+    newRes,
+    contactedRes,
+    demoRes,
+    convertedRes,
+    lostRes,
+    dueRes,
+    assigneeResult,
+  ]) {
+    if (result.error) throw new Error(result.error.message);
+  }
 
-  const today = istTodayYmd();
-  const overviewRows = (overviewResult.data || []) as { status: string; follow_up_on: string | null }[];
   const overview: InquiryOverview = {
-    total: overviewRows.length,
-    newCount: overviewRows.filter((row) => row.status === 'new').length,
-    contacted: overviewRows.filter((row) => row.status === 'contacted').length,
-    demoScheduled: overviewRows.filter((row) => row.status === 'demo_scheduled').length,
-    converted: overviewRows.filter((row) => row.status === 'converted').length,
-    lost: overviewRows.filter((row) => row.status === 'lost').length,
-    dueToday: overviewRows.filter(
-      (row) =>
-        row.follow_up_on &&
-        row.follow_up_on <= today &&
-        row.status !== 'converted' &&
-        row.status !== 'lost'
-    ).length,
+    total: totalRes.count ?? 0,
+    newCount: newRes.count ?? 0,
+    contacted: contactedRes.count ?? 0,
+    demoScheduled: demoRes.count ?? 0,
+    converted: convertedRes.count ?? 0,
+    lost: lostRes.count ?? 0,
+    dueToday: dueRes.count ?? 0,
   };
 
   const assignees = [
