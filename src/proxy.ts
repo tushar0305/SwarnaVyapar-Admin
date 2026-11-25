@@ -7,6 +7,8 @@ import {
   isAdminAuthBypassed,
   isAdminSessionExpired,
   isIpAllowed,
+  sessionSigningSecret,
+  verifyAdminSession,
 } from '@/lib/admin-security';
 
 /** Next.js 16+ proxy (replaces deprecated middleware.ts convention). */
@@ -72,8 +74,10 @@ export async function proxy(request: NextRequest) {
 
   if (user && !isPublicPath) {
     const timeoutSec = Number(process.env.ADMIN_SESSION_TIMEOUT || 0);
-    const raw = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
-    const startedAt = raw ? Number(raw) : null;
+    const startedAt = await verifyAdminSession(
+      request.cookies.get(ADMIN_SESSION_COOKIE)?.value,
+      sessionSigningSecret()
+    );
     if (isAdminSessionExpired(startedAt, timeoutSec)) {
       await supabase.auth.signOut();
       const login = NextResponse.redirect(new URL('/login', request.url));

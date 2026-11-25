@@ -8,6 +8,7 @@ import {
   type InquiryInterest,
   type InquiryStatus,
 } from '@/lib/marketing-inquiries';
+import { ilikeAny } from '@/lib/postgrest-filter';
 import { logAdminAction, requireAdminPermission, requireSuperAdmin } from './admin-auth.service';
 
 const PAGE_SIZE = 40;
@@ -132,12 +133,8 @@ export async function listMarketingInquiries(filters: InquiryListFilters = {}): 
 
   const q = filters.q?.trim();
   if (q) {
-    const safe = q.replace(/[%_,]/g, '');
-    if (safe) {
-      query = query.or(
-        `name.ilike.%${safe}%,shop_name.ilike.%${safe}%,phone.ilike.%${safe}%,city.ilike.%${safe}%,state.ilike.%${safe}%`
-      );
-    }
+    const filter = ilikeAny(['name', 'shop_name', 'phone', 'city', 'state'], q);
+    if (filter) query = query.or(filter);
   }
   if (filters.status && isInquiryStatus(filters.status)) {
     query = query.eq('status', filters.status);

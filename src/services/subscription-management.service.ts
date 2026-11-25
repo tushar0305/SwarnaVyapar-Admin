@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { requireSuperAdmin, logAdminAction } from './admin-auth.service';
+import { requireSuperAdmin, logAdminAction, assertAnyAdminPermission } from './admin-auth.service';
 import { planMonthlyPrice } from '@/lib/plan-prices';
 
 interface SubscriptionFilters {
@@ -78,12 +78,33 @@ export async function updateSubscription(
   },
   reason?: string
 ) {
-  await requireSuperAdmin();
+  await assertAnyAdminPermission(['manage_shops', 'system_settings']);
   const supabase = getServiceRoleClient();
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (
+    updates.plan_id === 'free' ||
+    updates.plan_id === 'pro' ||
+    updates.plan_id === 'business' ||
+    updates.plan_id === 'enterprise'
+  ) {
+    patch.plan_id = updates.plan_id;
+  }
+  if (
+    updates.status === 'active' ||
+    updates.status === 'past_due' ||
+    updates.status === 'canceled' ||
+    updates.status === 'trialing' ||
+    updates.status === 'unpaid'
+  ) {
+    patch.status = updates.status;
+  }
+  if (typeof updates.cancel_at_period_end === 'boolean') {
+    patch.cancel_at_period_end = updates.cancel_at_period_end;
+  }
 
   const { data, error } = await supabase
     .from('subscriptions')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update(patch)
     .eq('id', subscriptionId)
     .select()
     .single();

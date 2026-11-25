@@ -1,7 +1,7 @@
 'use server';
 
 import { createServerClient } from '@/lib/supabase/server';
-import { requireSuperAdmin, logAdminAction } from './admin-auth.service';
+import { requireSuperAdmin, logAdminAction, assertAdminPermission } from './admin-auth.service';
 
 interface ShopConfiguration {
   shopId: string;
@@ -99,35 +99,36 @@ export async function updateShopConfiguration(
   shopId: string,
   updates: Partial<ShopConfiguration['settings']>
 ) {
-  const admin = await requireSuperAdmin();
+  const admin = await assertAdminPermission('manage_shops');
   const supabase = await createServerClient();
   
   // Update shop basic info if changed
   if (updates.general) {
-    await supabase
-      .from('shops')
-      .update({
-        shop_name: updates.general.shopName,
-        email: updates.general.email,
-        phone_number: updates.general.phone,
-      })
-      .eq('id', shopId);
+    const shopPatch: Record<string, string> = {};
+    if (typeof updates.general.shopName === 'string' && updates.general.shopName.trim()) {
+      shopPatch.shop_name = updates.general.shopName.trim();
+    }
+    if (typeof updates.general.email === 'string') shopPatch.email = updates.general.email.trim();
+    if (typeof updates.general.phone === 'string') shopPatch.phone_number = updates.general.phone.trim();
+    if (Object.keys(shopPatch).length > 0) {
+      await supabase.from('shops').update(shopPatch).eq('id', shopId);
+    }
   }
   
   // Update or create settings
   const settingsUpdate: any = {};
   
   if (updates.general) {
-    settingsUpdate.timezone = updates.general.timezone;
-    settingsUpdate.locale = updates.general.locale;
-    settingsUpdate.currency = updates.general.currency;
+    if (typeof updates.general.timezone === 'string') settingsUpdate.timezone = updates.general.timezone;
+    if (typeof updates.general.locale === 'string') settingsUpdate.locale = updates.general.locale;
+    if (typeof updates.general.currency === 'string') settingsUpdate.currency = updates.general.currency;
   }
-  
+
   if (updates.branding) {
-    settingsUpdate.logo_url = updates.branding.logo;
-    settingsUpdate.primary_color = updates.branding.primaryColor;
-    settingsUpdate.secondary_color = updates.branding.secondaryColor;
-    settingsUpdate.custom_domain = updates.branding.customDomain;
+    if (typeof updates.branding.logo === 'string') settingsUpdate.logo_url = updates.branding.logo;
+    if (typeof updates.branding.primaryColor === 'string') settingsUpdate.primary_color = updates.branding.primaryColor;
+    if (typeof updates.branding.secondaryColor === 'string') settingsUpdate.secondary_color = updates.branding.secondaryColor;
+    if (typeof updates.branding.customDomain === 'string') settingsUpdate.custom_domain = updates.branding.customDomain;
   }
   
   if (updates.features) {
@@ -168,7 +169,7 @@ export async function updateShopConfiguration(
  * Reset shop configuration to defaults
  */
 export async function resetShopConfiguration(shopId: string, reason: string) {
-  const admin = await requireSuperAdmin();
+  const admin = await assertAdminPermission('manage_shops');
   const supabase = await createServerClient();
   
   // Delete custom settings (will fall back to defaults)
@@ -198,7 +199,7 @@ export async function updateShopBranding(
     customDomain?: string;
   }
 ) {
-  const admin = await requireSuperAdmin();
+  const admin = await assertAdminPermission('manage_shops');
   const supabase = await createServerClient();
   
   await supabase
@@ -234,7 +235,7 @@ export async function updateShopLocalization(
     timeFormat?: string;
   }
 ) {
-  const admin = await requireSuperAdmin();
+  const admin = await assertAdminPermission('manage_shops');
   const supabase = await createServerClient();
   
   await supabase
@@ -265,7 +266,7 @@ export async function updateShopFeatureAccess(
   shopId: string,
   features: { [key: string]: boolean }
 ) {
-  const admin = await requireSuperAdmin();
+  const admin = await assertAdminPermission('manage_shops');
   const supabase = await createServerClient();
   
   // Get current settings
@@ -309,7 +310,7 @@ export async function updateShopLimits(
     maxCustomers?: number;
   }
 ) {
-  const admin = await requireSuperAdmin();
+  const admin = await assertAdminPermission('manage_shops');
   const supabase = await createServerClient();
   
   await supabase
@@ -370,7 +371,7 @@ export async function bulkUpdateShopSettings(
     feature?: { key: string; enabled: boolean };
   }
 ) {
-  const admin = await requireSuperAdmin();
+  const admin = await assertAdminPermission('manage_shops');
   const supabase = await createServerClient();
   
   for (const shopId of shopIds) {

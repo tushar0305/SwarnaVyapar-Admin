@@ -941,7 +941,11 @@ export async function getLeadDetail(id: string): Promise<LeadDetail | null> {
           .from('audit_logs')
           .select('id, action, entity_type, user_id, created_at')
           .eq('shop_id', row.shopId)
-          .or(`user_id.eq.${row.userId},user_id.is.null`)
+          .or(
+            isUuid(row.userId)
+              ? `user_id.eq.${row.userId},user_id.is.null`
+              : 'user_id.is.null'
+          )
           .order('created_at', { ascending: false })
           .limit(40)
       : Promise.resolve({ data: [], error: null }),

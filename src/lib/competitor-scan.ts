@@ -3,6 +3,8 @@
  * Never claim a shop uses software without a matching public string.
  */
 
+import { fetchPublic } from '@/lib/public-url';
+
 export type CompetitorSignal = {
   vendor: string;
   evidence: string;
@@ -57,19 +59,17 @@ export async function scanWebsiteCompetitorSignals(
   const url = normalizeUrl(website);
   if (!url) return { signals: [], fetched: false, error: 'Invalid website URL' };
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(url, {
+    const res = await fetchPublic(url, {
       method: 'GET',
-      redirect: 'follow',
       signal: controller.signal,
       headers: {
         'User-Agent': 'SwarnaVyaparAdminBot/1.0 (+https://swarnavyapar.com; sales-research)',
         Accept: 'text/html,application/xhtml+xml',
       },
     });
-    clearTimeout(timer);
     if (!res.ok) {
       return { signals: [], fetched: true, error: `HTTP ${res.status}` };
     }
@@ -100,5 +100,7 @@ export async function scanWebsiteCompetitorSignals(
       fetched: false,
       error: error instanceof Error ? error.message : 'Fetch failed',
     };
+  } finally {
+    clearTimeout(timer);
   }
 }

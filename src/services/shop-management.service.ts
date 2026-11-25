@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
+import { ilikeAny } from '@/lib/postgrest-filter';
 import { requireAdminPermission, requireSuperAdmin, logAdminAction } from './admin-auth.service';
 import { revokeUsersWithoutLiveShop } from '@/lib/auth-sessions';
 import { success, failure } from '@/lib/utils';
@@ -49,19 +50,13 @@ export async function getAllShops(filters?: {
   }
 
   if (filters?.search) {
-    const term = filters.search.replace(/[%_,.()"'\\]/g, ' ').trim().slice(0, 80);
-    if (term) {
-      query = query.or(
-        `shop_name.ilike.%${term}%,phone_number.ilike.%${term}%,email.ilike.%${term}%`
-      );
-    }
+    const filter = ilikeAny(['shop_name', 'phone_number', 'email'], filters.search);
+    if (filter) query = query.or(filter);
   }
 
-  if (filters?.limit || filters?.offset) {
-    const limit = filters.limit || 50;
-    const offset = filters.offset || 0;
-    query = query.range(offset, offset + limit - 1);
-  }
+  const limit = Math.min(Math.max(filters?.limit ?? 50, 1), 200);
+  const offset = Math.max(filters?.offset ?? 0, 0);
+  query = query.range(offset, offset + limit - 1);
 
   const { data, error, count } = await query;
 
@@ -72,13 +67,14 @@ export async function getAllShops(filters?: {
 
 export async function searchShops(query: string): Promise<{ id: string; name: string }[]> {
   await requireSuperAdmin();
-  const term = query.replace(/[%_,.()"'\\]/g, ' ').trim().slice(0, 80);
-  if (term.length < 2) return [];
+  if (query.trim().length < 2) return [];
+  const filter = ilikeAny(['shop_name', 'phone_number', 'email'], query);
+  if (!filter) return [];
   const supabase = getServiceRoleClient();
   const { data, error } = await supabase
     .from('shops')
     .select('id, shop_name')
-    .or(`shop_name.ilike.%${term}%,phone_number.ilike.%${term}%,email.ilike.%${term}%`)
+    .or(filter)
     .order('shop_name')
     .limit(8);
   if (error) throw error;

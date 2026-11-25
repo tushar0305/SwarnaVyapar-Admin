@@ -2,10 +2,17 @@
 
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { createServerClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { clientIp, isAdminAuthBypassed } from '@/lib/admin-security';
+import { ilikeAny } from '@/lib/postgrest-filter';
+import {
+  ADMIN_SESSION_COOKIE,
+  clientIp,
+  isAdminAuthBypassed,
+  sessionSigningSecret,
+  signAdminSession,
+} from '@/lib/admin-security';
 import {
   LOCAL_BYPASS_ADMIN_ID,
   auditTargetId,
@@ -73,20 +80,47 @@ export const requireSuperAdmin = cache(async (): Promise<SuperAdmin> => {
     redirect('/unauthorized');
   }
 
-  // Fire-and-forget last login (don't block page)
-  void supabase
-    .from('super_admins')
-    .update({ last_login_at: new Date().toISOString() })
-    .eq('id', admin.id);
+  const record = admin as SuperAdmin;
+  const lastLogin = record.last_login_at ? Date.parse(record.last_login_at) : 0;
+  if (!lastLogin || Date.now() - lastLogin > 15 * 60 * 1000) {
+    void supabase
+      .from('super_admins')
+      .update({ last_login_at: new Date().toISOString() })
+      .eq('id', record.id);
+  }
 
-  return admin as SuperAdmin;
+  return record;
 });
+
+const SESSION_COOKIE = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  path: '/',
+};
+
+/** Issue the signed idle-timeout cookie after a successful super-admin login. */
+export async function stampAdminSession(): Promise<void> {
+  await requireSuperAdmin();
+  const secret = sessionSigningSecret();
+  if (!secret) return;
+  const jar = await cookies();
+  jar.set(ADMIN_SESSION_COOKIE, await signAdminSession(Date.now(), secret), {
+    ...SESSION_COOKIE,
+    maxAge: 60 * 60 * 24 * 30,
+  });
+}
+
+export async function clearAdminSession(): Promise<void> {
+  const jar = await cookies();
+  jar.set(ADMIN_SESSION_COOKIE, '', { ...SESSION_COOKIE, maxAge: 0 });
+}
 
 export async function checkAdminPermission(
   permission: keyof SuperAdmin['permissions']
 ): Promise<boolean> {
   const admin = await requireSuperAdmin();
-  return admin.permissions[permission] === true;
+  return admin.permissions?.[permission] === true;
 }
 
 /** Fail closed: redirect instead of throwing a 500. */
@@ -94,8 +128,29 @@ export async function requireAdminPermission(
   permission: keyof SuperAdmin['permissions']
 ): Promise<SuperAdmin> {
   const admin = await requireSuperAdmin();
-  if (admin.permissions[permission] !== true) {
+  if (admin.permissions?.[permission] !== true) {
     redirect('/unauthorized');
+  }
+  return admin;
+}
+
+/** For server actions that return a result instead of navigating. */
+export async function assertAdminPermission(
+  permission: keyof SuperAdmin['permissions']
+): Promise<SuperAdmin> {
+  const admin = await requireSuperAdmin();
+  if (admin.permissions?.[permission] !== true) {
+    throw new Error('Unauthorized');
+  }
+  return admin;
+}
+
+export async function assertAnyAdminPermission(
+  permissions: Array<keyof SuperAdmin['permissions']>
+): Promise<SuperAdmin> {
+  const admin = await requireSuperAdmin();
+  if (!permissions.some((permission) => admin.permissions?.[permission] === true)) {
+    throw new Error('Unauthorized');
   }
   return admin;
 }
@@ -172,17 +227,12 @@ export async function getAuditLog(filters?: {
   if (filters?.fromDate) query = query.gte('created_at', filters.fromDate);
   if (filters?.toDate) query = query.lte('created_at', filters.toDate);
   if (filters?.search) {
-    query = query.or(
-      `reason.ilike.%${filters.search}%,action.ilike.%${filters.search}%`
-    );
+    const filter = ilikeAny(['reason', 'action'], filters.search);
+    if (filter) query = query.or(filter);
   }
-  if (filters?.limit) query = query.limit(filters.limit);
-  if (filters?.offset) {
-    query = query.range(
-      filters.offset,
-      filters.offset + (filters.limit || 50) - 1
-    );
-  }
+  const limit = Math.min(Math.max(filters?.limit ?? 50, 1), 200);
+  const offset = Math.max(filters?.offset ?? 0, 0);
+  query = query.range(offset, offset + limit - 1);
 
   const { data, error, count } = await query;
   if (error) throw error;

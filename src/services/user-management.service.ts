@@ -253,7 +253,7 @@ export async function forcePasswordReset(userId: string): Promise<
 
     return success({
       emailed: !mailed.error,
-      recoveryLink: link.data.properties?.action_link ?? null,
+      recoveryLink: mailed.error ? (link.data.properties?.action_link ?? null) : null,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to send password reset';

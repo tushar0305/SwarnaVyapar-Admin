@@ -2,7 +2,7 @@
 
 import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { authActorId } from '@/lib/admin-ids';
-import { requireSuperAdmin, logAdminAction } from './admin-auth.service';
+import { requireSuperAdmin, logAdminAction, assertAdminPermission } from './admin-auth.service';
 import { fanOutShopNotifications } from './shop-inbox.service';
 
 interface EmailMessage {
@@ -37,7 +37,7 @@ const EMAIL_NOT_CONFIGURED =
  * No email provider is wired. Do not claim mail was sent.
  */
 export async function sendEmailToShops(shopIds: string[], message: EmailMessage) {
-  await requireSuperAdmin();
+  await assertAdminPermission('manage_shops');
   return {
     success: false as const,
     sentCount: 0,
@@ -53,7 +53,7 @@ export async function sendEmailToShops(shopIds: string[], message: EmailMessage)
  * Fan-out into public.notifications — the shop Notification Center inbox.
  */
 export async function sendNotificationToShops(shopIds: string[], notification: Notification) {
-  await requireSuperAdmin();
+  await assertAdminPermission('manage_shops');
   const sentCount = await fanOutShopNotifications({
     shopIds,
     title: notification.title,
@@ -90,7 +90,7 @@ export async function broadcastMessage(message: {
   type: 'email' | 'notification' | 'both';
   priority: 'normal' | 'high';
 }) {
-  await requireSuperAdmin();
+  await assertAdminPermission('manage_shops');
   const supabase = getServiceRoleClient();
 
   const { data: shops, error } = await supabase
@@ -142,7 +142,7 @@ export async function broadcastMessage(message: {
  * Create support ticket (admin-initiated on behalf of a shop)
  */
 export async function createSupportTicket(ticket: Omit<SupportTicket, 'status'>) {
-  const admin = await requireSuperAdmin();
+  const admin = await assertAdminPermission('manage_shops');
   const supabase = getServiceRoleClient();
 
   const { data, error } = await supabase
@@ -219,7 +219,7 @@ export async function updateSupportTicketStatus(
   status: 'open' | 'in_progress' | 'resolved' | 'closed',
   resolution?: string
 ) {
-  const admin = await requireSuperAdmin();
+  const admin = await assertAdminPermission('manage_shops');
   const supabase = getServiceRoleClient();
 
   const updates: Record<string, string | null> = {

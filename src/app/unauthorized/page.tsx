@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertTriangle } from 'lucide-react';
 import { BrandLogo } from '@/components/brand-logo';
 import { createClient } from '@/lib/supabase/client';
-import { ADMIN_SESSION_COOKIE } from '@/lib/admin-security';
+import { clearAdminSession } from '@/services/admin-auth.service';
 
 export default function UnauthorizedPage() {
   const [loading, setLoading] = useState(false);
@@ -16,7 +16,7 @@ export default function UnauthorizedPage() {
     try {
       const supabase = createClient();
       await supabase.auth.signOut();
-      document.cookie = `${ADMIN_SESSION_COOKIE}=; Max-Age=0; path=/; SameSite=Lax`;
+      await clearAdminSession();
     } finally {
       // Full navigation so proxy sees cleared session (Link to /login would bounce to /overview)
       window.location.href = '/login';

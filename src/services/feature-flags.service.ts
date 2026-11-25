@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { createServerClient } from '@/lib/supabase/server';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { authActorId } from '@/lib/admin-ids';
-import { requireSuperAdmin, logAdminAction } from './admin-auth.service';
+import { ilikeAny } from '@/lib/postgrest-filter';
+import { requireSuperAdmin, logAdminAction, assertAdminPermission } from './admin-auth.service';
 import { success, failure } from '@/lib/utils';
 import type { ServiceResult } from '@/types';
 
@@ -77,7 +78,8 @@ export async function getAllFeatureFlags(filters?: {
   }
 
   if (filters?.search) {
-    query = query.or(`name.ilike.%${filters.search}%,feature_key.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+    const filter = ilikeAny(['name', 'feature_key', 'description'], filters.search);
+    if (filter) query = query.or(filter);
   }
 
   const { data, error } = await query;
@@ -110,7 +112,7 @@ export async function createFeatureFlag(
   input: CreateFeatureFlagInput
 ): Promise<ServiceResult<FeatureFlag>> {
   try {
-    await requireSuperAdmin();
+    await assertAdminPermission('manage_features');
     const supabase = await createServerClient();
 
     const { data, error } = await supabase
@@ -151,15 +153,23 @@ export async function updateFeatureFlag(
   input: UpdateFeatureFlagInput
 ): Promise<ServiceResult<FeatureFlag>> {
   try {
-    await requireSuperAdmin();
+    await assertAdminPermission('manage_features');
     const supabase = await createServerClient();
+
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (typeof input.name === 'string') patch.name = input.name.trim();
+    if (typeof input.description === 'string') patch.description = input.description;
+    if (typeof input.is_enabled_globally === 'boolean') patch.is_enabled_globally = input.is_enabled_globally;
+    if (typeof input.rollout_percentage === 'number') {
+      if (input.rollout_percentage < 0 || input.rollout_percentage > 100) {
+        throw new Error('Rollout percentage must be between 0 and 100');
+      }
+      patch.rollout_percentage = input.rollout_percentage;
+    }
 
     const { data, error } = await supabase
       .from('feature_flags')
-      .update({
-        ...input,
-        updated_at: new Date().toISOString(),
-      })
+      .update(patch)
       .eq('feature_key', featureKey)
       .select()
       .single();
@@ -190,7 +200,7 @@ export async function toggleFeatureFlag(
   enabled: boolean
 ): Promise<ServiceResult<FeatureFlag>> {
   try {
-    await requireSuperAdmin();
+    await assertAdminPermission('manage_features');
     const supabase = await createServerClient();
 
     const { data, error } = await supabase
@@ -228,7 +238,7 @@ export async function deleteFeatureFlag(
   featureKey: string
 ): Promise<ServiceResult<void>> {
   try {
-    await requireSuperAdmin();
+    await assertAdminPermission('manage_features');
     const supabase = await createServerClient();
 
     // Get flag info for audit
@@ -300,7 +310,7 @@ export async function createFeatureOverride(
   input: CreateFeatureOverrideInput
 ): Promise<ServiceResult<ShopFeatureOverride>> {
   try {
-    const admin = await requireSuperAdmin();
+    const admin = await assertAdminPermission('manage_features');
     const supabase = getServiceRoleClient();
 
     const { data, error } = await supabase
@@ -341,7 +351,7 @@ export async function deleteFeatureOverride(
   overrideId: string
 ): Promise<ServiceResult<void>> {
   try {
-    await requireSuperAdmin();
+    await assertAdminPermission('manage_features');
     const supabase = getServiceRoleClient();
 
     // Get override info for audit

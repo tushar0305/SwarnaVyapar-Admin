@@ -3,6 +3,8 @@
  * Docs: https://serpapi.com/google-maps-api · https://serpapi.com/maps-place-results
  */
 
+import { fetchPublic } from '@/lib/public-url';
+
 export type SerpApiMapsLocalResult = {
   position?: number;
   title?: string;
@@ -131,31 +133,24 @@ export async function fetchGoogleMapsPlace(params: {
   return serpFetch(url.toString());
 }
 
-/** Lightweight public website reachability check (HEAD then GET). */
+/** Lightweight public website reachability check (HEAD then GET). Private and redirect targets are refused. */
 export async function checkWebsiteReachable(website: string): Promise<boolean> {
-  let url = website.trim();
-  if (!url) return false;
-  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+  if (!website.trim()) return false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
-    let res = await fetch(url, {
-      method: 'HEAD',
-      redirect: 'follow',
+    const init = {
       signal: controller.signal,
       headers: { 'User-Agent': 'SwarnaVyaparAdminBot/1.0' },
-    });
+    };
+    let res = await fetchPublic(website, { ...init, method: 'HEAD' });
     if (res.status === 405 || res.status === 403) {
-      res = await fetch(url, {
-        method: 'GET',
-        redirect: 'follow',
-        signal: controller.signal,
-        headers: { 'User-Agent': 'SwarnaVyaparAdminBot/1.0' },
-      });
+      res = await fetchPublic(website, { ...init, method: 'GET' });
     }
-    clearTimeout(timer);
     return res.ok || (res.status >= 200 && res.status < 400);
   } catch {
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { requireSuperAdmin, logAdminAction } from './admin-auth.service';
+import { requireSuperAdmin, logAdminAction, assertAnyAdminPermission } from './admin-auth.service';
 import { planMonthlyPrice } from '@/lib/plan-prices';
 import { amountFromPayload, classifyBillingEvent } from '@/lib/billing-events';
 
@@ -47,7 +47,7 @@ export async function getAllPaymentHistory(filters?: {
     `
     )
     .order('created_at', { ascending: false })
-    .limit(filters?.limit ?? 100);
+    .limit(Math.min(Math.max(filters?.limit ?? 100, 1), 500));
 
   if (filters?.eventType) query = query.eq('event_type', filters.eventType);
   if (filters?.startDate) query = query.gte('created_at', filters.startDate);
@@ -156,10 +156,7 @@ export async function setShopPlan(input: {
   applicableUntil?: string | null;
   reason: string;
 }) {
-  const admin = await requireSuperAdmin();
-  if (!admin.permissions.manage_shops && !admin.permissions.system_settings) {
-    throw new Error('Unauthorized');
-  }
+  const admin = await assertAnyAdminPermission(['manage_shops', 'system_settings']);
   if (!input.reason.trim()) throw new Error('A reason is required');
 
   const supabase = getServiceRoleClient();

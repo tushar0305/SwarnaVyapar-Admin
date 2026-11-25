@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
 import { isLocalBypassAdminId } from '@/lib/admin-ids';
-import { requireSuperAdmin, logAdminAction } from './admin-auth.service';
+import { ilikeAny } from '@/lib/postgrest-filter';
+import { requireSuperAdmin, logAdminAction, assertAdminPermission } from './admin-auth.service';
 import { fanOutShopNotifications, listShopIdsForAudience } from './shop-inbox.service';
 import { success, failure } from '@/lib/utils';
 import type { ServiceResult } from '@/types';
@@ -81,7 +82,8 @@ export async function getAllAnnouncements(filters?: {
   }
 
   if (filters?.search) {
-    query = query.or(`title.ilike.%${filters.search}%,message.ilike.%${filters.search}%`);
+    const filter = ilikeAny(['title', 'message'], filters.search);
+    if (filter) query = query.or(filter);
   }
 
   if (filters?.limit) {
@@ -118,7 +120,7 @@ export async function createAnnouncement(
   input: CreateAnnouncementInput
 ): Promise<ServiceResult<PlatformAnnouncement>> {
   try {
-    const admin = await requireSuperAdmin();
+    const admin = await assertAdminPermission('system_settings');
     const supabase = getServiceRoleClient();
     const published = input.is_published ?? false;
 
@@ -169,12 +171,25 @@ export async function updateAnnouncement(
   input: UpdateAnnouncementInput
 ): Promise<ServiceResult<PlatformAnnouncement>> {
   try {
-    await requireSuperAdmin();
+    await assertAdminPermission('system_settings');
     const supabase = getServiceRoleClient();
 
-    // If publishing for first time, set published_at
-    const updateData: any = { ...input };
-    if (input.is_published && !updateData.published_at) {
+    const updateData: Record<string, unknown> = {};
+    if (typeof input.title === 'string') updateData.title = input.title.trim();
+    if (typeof input.message === 'string') updateData.message = input.message.trim();
+    if (input.type === 'info' || input.type === 'warning' || input.type === 'critical' || input.type === 'maintenance') {
+      updateData.type = input.type;
+    }
+    if (typeof input.target_audience === 'string') {
+      updateData.target_audience = input.target_audience.trim().slice(0, 40);
+    }
+    if (typeof input.is_published === 'boolean') updateData.is_published = input.is_published;
+    if (typeof input.expires_at === 'string' || input.expires_at === null) {
+      updateData.expires_at = input.expires_at;
+    }
+    if (Object.keys(updateData).length === 0) throw new Error('Nothing to update');
+
+    if (input.is_published) {
       const existing = await getAnnouncementById(id);
       if (!existing.is_published) {
         updateData.published_at = new Date().toISOString();
@@ -220,7 +235,7 @@ export async function toggleAnnouncementPublish(
   publish: boolean
 ): Promise<ServiceResult<PlatformAnnouncement>> {
   try {
-    await requireSuperAdmin();
+    await assertAdminPermission('system_settings');
     const supabase = getServiceRoleClient();
 
     const { data, error } = await supabase
@@ -262,7 +277,7 @@ export async function toggleAnnouncementPublish(
  */
 export async function deleteAnnouncement(id: string): Promise<ServiceResult<void>> {
   try {
-    await requireSuperAdmin();
+    await assertAdminPermission('system_settings');
     const supabase = getServiceRoleClient();
 
     // Get announcement info for audit

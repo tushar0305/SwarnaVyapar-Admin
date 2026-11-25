@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
-import { logAdminAction, requireSuperAdmin } from './admin-auth.service';
+import { logAdminAction, requireSuperAdmin, assertAdminPermission } from './admin-auth.service';
 import {
   ensureOpsTemplate,
   getWhatsAppConfig,
@@ -285,7 +285,7 @@ export async function sendWhatsAppToShop(input: {
   buttonParams?: Array<{ index: number; text: string }>;
   source?: string;
 }): Promise<WhatsAppSendResult> {
-  await requireSuperAdmin();
+  await assertAdminPermission('manage_shops');
   const config = getWhatsAppConfig();
   if (!config) {
     throw new Error('WhatsApp Cloud API is not configured. Add the token, phone number ID, and WABA ID.');
@@ -548,7 +548,7 @@ export async function sendWhatsAppToShops(input: {
   shopIds: string[];
   message: string;
 }): Promise<{ sent: number; failed: number; results: WhatsAppSendResult[] }> {
-  await requireSuperAdmin();
+  await assertAdminPermission('manage_shops');
   const ids = [...new Set(input.shopIds)].slice(0, 15);
   if (ids.length === 0) throw new Error('Select at least one shop');
   const message = input.message.trim();

@@ -12,7 +12,7 @@ import {
   type AgentPlayId,
 } from '@/lib/agent-plays';
 import { normalizeWhatsAppPhone } from '@/lib/whatsapp/phone';
-import { logAdminAction, requireSuperAdmin } from './admin-auth.service';
+import { logAdminAction, requireSuperAdmin, assertAdminPermission } from './admin-auth.service';
 import { getActivationSnapshot } from './onboarding.service';
 import { sendWhatsAppToShop } from './whatsapp-outreach.service';
 
@@ -187,7 +187,7 @@ async function upsertState(
 }
 
 export async function approveAgentSend(shopId: string) {
-  await requireSuperAdmin();
+  await assertAdminPermission('manage_shops');
   const queue = await getAgentQueue();
   const row = queue.find((item) => item.shopId === shopId);
   if (!row) throw new Error('This shop has no play right now');
@@ -238,7 +238,7 @@ export async function approveAgentSend(shopId: string) {
 }
 
 export async function setAgentOptOut(shopId: string, optedOut: boolean) {
-  await requireSuperAdmin();
+  await assertAdminPermission('manage_shops');
   await upsertState(shopId, { opted_out: optedOut });
   await logAdminAction(
     optedOut ? 'agent_opt_out' : 'agent_opt_in',
@@ -251,13 +251,13 @@ export async function setAgentOptOut(shopId: string, optedOut: boolean) {
 }
 
 export async function setAgentEscalation(shopId: string, escalated: boolean) {
-  await requireSuperAdmin();
+  await assertAdminPermission('manage_shops');
   await upsertState(shopId, { escalated });
   revalidatePath('/agent');
 }
 
 export async function saveAgentReply(shopId: string, reply: string) {
-  await requireSuperAdmin();
+  await assertAdminPermission('manage_shops');
   const text = reply.trim();
   if (!text) throw new Error('Write what they replied');
   if (text.length > 500) throw new Error('Reply is too long');

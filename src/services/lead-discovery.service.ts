@@ -38,6 +38,7 @@ import {
   type SerpApiMapsLocalResult,
 } from '@/lib/serpapi/maps';
 import { getServiceRoleClient } from '@/lib/supabase/admin';
+import { ilikeAny } from '@/lib/postgrest-filter';
 import { logAdminAction, requireAdminPermission, requireSuperAdmin } from './admin-auth.service';
 
 const FREE_MONTHLY = SERPAPI_FREE_MONTHLY_SEARCHES;
@@ -793,11 +794,8 @@ export async function listDiscoveredLeads(filters: DiscoveryListFilters = {}): P
   }
 
   if (filters.q?.trim()) {
-    const safe = filters.q.trim().replace(/[%_,.()]/g, ' ').replace(/\s+/g, ' ').trim();
-    if (safe) {
-      const q = `%${safe}%`;
-      query = query.or(`business_name.ilike.${q},address.ilike.${q},phone.ilike.${q}`);
-    }
+    const filter = ilikeAny(['business_name', 'address', 'phone'], filters.q);
+    if (filter) query = query.or(filter);
   }
 
   const { data, error, count } = await query;

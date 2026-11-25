@@ -12,9 +12,8 @@ import {
 } from '@/components/ui/card';
 import { BrandWordmark } from '@/components/brand-logo';
 import { createClient } from '@/lib/supabase/client';
+import { stampAdminSession } from '@/services/admin-auth.service';
 import { toast } from 'sonner';
-
-const ADMIN_SESSION_COOKIE = 'sv_admin_session_at';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -50,8 +49,7 @@ export default function LoginPage() {
           return;
         }
 
-        // Session idle timeout anchor (checked in proxy)
-        document.cookie = `${ADMIN_SESSION_COOKIE}=${Date.now()}; path=/; SameSite=Lax`;
+        await stampAdminSession();
 
         toast.success('Login successful');
         router.push('/overview');
