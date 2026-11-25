@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* shadcn semantic tokens mapped onto the ink/gold brand palette */
+  :root {
+    --background: 60 5% 96%;
+    --foreground: 60 6% 13%;
+    --card: 0 0% 100%;
+    --card-foreground: 60 6% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 60 6% 13%;
+    --primary: 60 19% 7%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 60 6% 90%;
+    --secondary-foreground: 60 19% 7%;
+    --muted: 60 5% 96%;
+    --muted-foreground: 60 5% 35%;
+    --accent: 60 5% 96%;
+    --accent-foreground: 60 19% 7%;
+    --destructive: 0 72% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 60 6% 90%;
+    --input: 60 6% 80%;
+    --ring: 38 62% 48%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-white font-sans text-ink-800 antialiased;
+  }
+  h1 {
+    @apply font-serif;
+  }
+  ::selection {
+    @apply bg-gold-200 text-ink-900;
+  }
+  *:focus-visible {
+    @apply outline outline-2 outline-offset-2 outline-gold-500;
+  }
+  /* Prefer dvh so mobile browser chrome does not clip the sticky shell */
+  @supports (height: 100dvh) {
+    .min-h-dvh {
+      min-height: 100dvh;
+    }
+  }
+}
+
+@layer utilities {
+  .tnum {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  /* Opacity-only — transform on this shell wrapper makes position:fixed
+     children (drawers/modals) size to the page instead of the viewport. */
+  .animate-in-soft {
+    animation: sv-fade-in 0.25s ease-out both;
+  }
+  @keyframes sv-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes sv-shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0.6) 60%,
+      rgba(255, 255, 255, 0)
+    );
+    animation: sv-shimmer 1.4s infinite;
+  }
+}
