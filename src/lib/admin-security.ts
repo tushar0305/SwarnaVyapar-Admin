@@ -98,6 +98,31 @@ export function isIpAllowed(ip: string, whitelistCsv: string | undefined): boole
   return list.includes(ip);
 }
 
+/**
+ * Gate admin routes by ADMIN_IP_WHITELIST.
+ * - Empty whitelist → allow
+ * - Known IP not listed → deny
+ * - Unknown IP (common on local `next dev` with no proxy headers):
+ *   allow outside production, deny in production
+ */
+export function isAdminIpPermitted(
+  ip: string,
+  whitelistCsv: string | undefined,
+  nodeEnv = process.env.NODE_ENV
+): { allowed: boolean; reason?: 'not_listed' | 'unknown_ip' } {
+  const list = (whitelistCsv || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (list.length === 0) return { allowed: true };
+  if (!ip) {
+    if (nodeEnv === 'production') return { allowed: false, reason: 'unknown_ip' };
+    return { allowed: true, reason: 'unknown_ip' };
+  }
+  if (!list.includes(ip)) return { allowed: false, reason: 'not_listed' };
+  return { allowed: true };
+}
+
 export function isAdminSessionExpired(
   startedAtMs: number | null,
   timeoutSeconds: number

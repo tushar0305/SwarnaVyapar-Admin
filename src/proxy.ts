@@ -6,12 +6,31 @@ import {
   adminSessionTimeoutSeconds,
   clientIp,
   isAdminAuthBypassed,
+  isAdminIpPermitted,
   isAdminSessionExpired,
-  isIpAllowed,
   sessionSigningSecret,
   verifyAdminSession,
 } from '@/lib/admin-security';
 import { hasSupabasePublicEnv } from '@/lib/supabase/env';
+
+function isNextServerAction(request: NextRequest): boolean {
+  return request.method === 'POST' && Boolean(request.headers.get('next-action'));
+}
+
+/**
+ * Auth denials for document navigations use redirects.
+ * Redirecting a Server Action POST breaks the action protocol and surfaces
+ * "An unexpected response was received from the server" in the browser.
+ */
+function denyAccess(request: NextRequest, path: '/login' | '/unauthorized') {
+  if (isNextServerAction(request)) {
+    return NextResponse.json(
+      { error: path === '/login' ? 'Unauthenticated' : 'Forbidden' },
+      { status: path === '/login' ? 401 : 403 }
+    );
+  }
+  return NextResponse.redirect(new URL(path, request.url));
+}
 
 /** Next.js 16+ proxy (replaces deprecated middleware.ts convention). */
 export async function proxy(request: NextRequest) {
@@ -36,8 +55,14 @@ export async function proxy(request: NextRequest) {
   // IP allowlist (empty env = allow all for local dev)
   if (!isPublicPath) {
     const ip = clientIp(request.headers);
-    if (!isIpAllowed(ip, process.env.ADMIN_IP_WHITELIST)) {
-      return NextResponse.redirect(new URL('/unauthorized', request.url));
+    const gate = isAdminIpPermitted(ip, process.env.ADMIN_IP_WHITELIST);
+    if (!gate.allowed) {
+      return denyAccess(request, '/unauthorized');
+    }
+    if (gate.reason === 'unknown_ip' && process.env.NODE_ENV !== 'production') {
+      console.warn(
+        '[proxy] ADMIN_IP_WHITELIST is set but client IP is unknown; allowing in development'
+      );
     }
   }
 
@@ -77,10 +102,15 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user && !isPublicPath) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    return denyAccess(request, '/login');
   }
 
   if (user && request.nextUrl.pathname === '/login') {
+    if (isNextServerAction(request)) {
+      // Allow login-page actions (e.g. stampAdminSession) to finish; the
+      // client navigates after the action resolves.
+      return response;
+    }
     return NextResponse.redirect(new URL('/overview', request.url));
   }
 
@@ -95,6 +125,14 @@ export async function proxy(request: NextRequest) {
       // Missing secret or unsigned/forged cookie → force re-login when timeout is on.
       if (!secret || isAdminSessionExpired(startedAt, timeoutSec)) {
         await supabase.auth.signOut();
+        if (isNextServerAction(request)) {
+          const cleared = NextResponse.json(
+            { error: 'Session expired' },
+            { status: 401 }
+          );
+          cleared.cookies.delete(ADMIN_SESSION_COOKIE);
+          return cleared;
+        }
         const login = NextResponse.redirect(new URL('/login', request.url));
         login.cookies.delete(ADMIN_SESSION_COOKIE);
         return login;
@@ -109,7 +147,7 @@ export async function proxy(request: NextRequest) {
       .single();
 
     if (error || !admin) {
-      return NextResponse.redirect(new URL('/unauthorized', request.url));
+      return denyAccess(request, '/unauthorized');
     }
   }
 

@@ -6,6 +6,7 @@ import {
   adminSessionTimeoutSeconds,
   clientIp,
   isAdminAuthBypassed,
+  isAdminIpPermitted,
   isAdminSessionExpired,
   isIpAllowed,
   sessionSigningSecret,
@@ -18,6 +19,10 @@ console.assert(isIpAllowed('1.2.3.4', '') === true, 'empty whitelist allows');
 console.assert(isIpAllowed('1.2.3.4', '1.2.3.4,::1') === true, 'listed ok');
 console.assert(isIpAllowed('9.9.9.9', '1.2.3.4') === false, 'unlisted denied');
 console.assert(isIpAllowed('', '1.2.3.4') === false, 'missing ip denied');
+console.assert(isAdminIpPermitted('', '1.2.3.4', 'development').allowed === true, 'dev unknown ip allowed');
+console.assert(isAdminIpPermitted('', '1.2.3.4', 'production').allowed === false, 'prod unknown ip denied');
+console.assert(isAdminIpPermitted('9.9.9.9', '1.2.3.4', 'production').allowed === false, 'prod unlisted denied');
+console.assert(isAdminIpPermitted('1.2.3.4', '1.2.3.4', 'production').allowed === true, 'prod listed ok');
 
 console.assert(isAdminSessionExpired(null, 1800) === true, 'missing cookie');
 console.assert(isAdminSessionExpired(Date.now(), 1800) === false, 'fresh ok');

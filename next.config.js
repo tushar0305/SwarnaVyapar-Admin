@@ -2,6 +2,9 @@
 
 // Pragmatic CSP for Next + Supabase auth + Leaflet OSM tiles.
 // 'unsafe-inline' is required for Next.js inline bootstrapping without a nonce pipeline.
+// Do not add upgrade-insecure-requests: it breaks local/LAN http:// hosts
+// (Chrome upgrades fetches to https:// and login/server actions fail with
+// "Failed to fetch"). Production already sends HSTS below.
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -14,7 +17,6 @@ const contentSecurityPolicy = [
   "font-src 'self' data:",
   "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://nominatim.openstreetmap.org https://unpkg.com",
   "worker-src 'self' blob:",
-  'upgrade-insecure-requests',
 ].join('; ');
 
 const nextConfig = {

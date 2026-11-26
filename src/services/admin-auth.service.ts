@@ -99,11 +99,32 @@ const SESSION_COOKIE = {
   path: '/',
 };
 
-/** Issue the signed idle-timeout cookie after a successful super-admin login. */
+/**
+ * Issue the signed idle-timeout cookie after a successful super-admin login.
+ * Does not redirect — login is a client form and must get a normal action result.
+ */
 export async function stampAdminSession(): Promise<void> {
-  await requireSuperAdmin();
   const secret = sessionSigningSecret();
   if (!secret) return;
+
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Session was not established. Try signing in again.');
+  }
+
+  const { data: admin } = await supabase
+    .from('super_admins')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (!admin) {
+    throw new Error('You do not have super admin access');
+  }
+
   const jar = await cookies();
   jar.set(ADMIN_SESSION_COOKIE, await signAdminSession(Date.now(), secret), {
     ...SESSION_COOKIE,
