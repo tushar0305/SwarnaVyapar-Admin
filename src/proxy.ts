@@ -9,9 +9,18 @@ import {
   isAdminIpPermitted,
   isAdminSessionExpired,
   sessionSigningSecret,
+  signAdminSession,
   verifyAdminSession,
 } from '@/lib/admin-security';
 import { hasSupabasePublicEnv } from '@/lib/supabase/env';
+
+const IDLE_SESSION_COOKIE = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  path: '/',
+  maxAge: 60 * 60 * 24 * 30,
+};
 
 function isNextServerAction(request: NextRequest): boolean {
   return request.method === 'POST' && Boolean(request.headers.get('next-action'));
@@ -118,24 +127,53 @@ export async function proxy(request: NextRequest) {
     const timeoutSec = adminSessionTimeoutSeconds();
     if (timeoutSec > 0) {
       const secret = sessionSigningSecret();
-      const startedAt = await verifyAdminSession(
-        request.cookies.get(ADMIN_SESSION_COOKIE)?.value,
-        secret
-      );
-      // Missing secret or unsigned/forged cookie → force re-login when timeout is on.
-      if (!secret || isAdminSessionExpired(startedAt, timeoutSec)) {
-        await supabase.auth.signOut();
-        if (isNextServerAction(request)) {
-          const cleared = NextResponse.json(
-            { error: 'Session expired' },
-            { status: 401 }
-          );
-          cleared.cookies.delete(ADMIN_SESSION_COOKIE);
-          return cleared;
+      if (!secret) {
+        // Misconfigured production: do not bounce a valid Supabase session.
+        console.error(
+          '[proxy] ADMIN_SESSION_SECRET missing; idle timeout is inactive'
+        );
+      } else {
+        const raw = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
+        const startedAt = await verifyAdminSession(raw, secret);
+
+        if (raw && startedAt == null) {
+          // Present but forged/tampered — force re-login.
+          await supabase.auth.signOut();
+          if (isNextServerAction(request)) {
+            const cleared = NextResponse.json(
+              { error: 'Session expired' },
+              { status: 401 }
+            );
+            cleared.cookies.delete(ADMIN_SESSION_COOKIE);
+            return cleared;
+          }
+          const login = NextResponse.redirect(new URL('/login', request.url));
+          login.cookies.delete(ADMIN_SESSION_COOKIE);
+          return login;
         }
-        const login = NextResponse.redirect(new URL('/login', request.url));
-        login.cookies.delete(ADMIN_SESSION_COOKIE);
-        return login;
+
+        if (startedAt == null) {
+          // Missing idle cookie (common right after login / soft nav). Mint one
+          // instead of signing the user out — that caused login→overview→login loops.
+          response.cookies.set(
+            ADMIN_SESSION_COOKIE,
+            await signAdminSession(Date.now(), secret),
+            IDLE_SESSION_COOKIE
+          );
+        } else if (isAdminSessionExpired(startedAt, timeoutSec)) {
+          await supabase.auth.signOut();
+          if (isNextServerAction(request)) {
+            const cleared = NextResponse.json(
+              { error: 'Session expired' },
+              { status: 401 }
+            );
+            cleared.cookies.delete(ADMIN_SESSION_COOKIE);
+            return cleared;
+          }
+          const login = NextResponse.redirect(new URL('/login', request.url));
+          login.cookies.delete(ADMIN_SESSION_COOKIE);
+          return login;
+        }
       }
     }
 

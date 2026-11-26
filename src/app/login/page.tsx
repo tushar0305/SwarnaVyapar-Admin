@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -16,7 +15,6 @@ import { stampAdminSession } from '@/services/admin-auth.service';
 import { toast } from 'sonner';
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -52,8 +50,10 @@ export default function LoginPage() {
         await stampAdminSession();
 
         toast.success('Login successful');
-        router.push('/overview');
-        router.refresh();
+        // Full navigation so the idle-session Set-Cookie is on the next request.
+        // Soft router.push raced the proxy and bounced back to /login (307).
+        window.location.assign('/overview');
+        return;
       }
     } catch (error: unknown) {
       const message =
